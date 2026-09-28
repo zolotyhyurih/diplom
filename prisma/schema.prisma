@@ -27,6 +27,12 @@ enum OcrStatus {
   FAILED
 }
 
+enum AuditAction {
+  UPLOAD
+  VIEW
+  DOWNLOAD
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -37,6 +43,7 @@ model User {
 
   contracts Contract[]
   versions  ContractVersion[]
+  auditLogs AuditLog[]
 
   @@map("users")
 }
@@ -91,6 +98,7 @@ model Contract {
   createdBy    User              @relation(fields: [createdById], references: [id])
   versions     ContractVersion[]
   tags         Tag[]
+  auditLogs    AuditLog[]
 
   @@index([expiresAt])
   @@index([counterpartyId])
@@ -122,4 +130,19 @@ model ContractVersion {
   @@unique([contractId, versionNumber])
   @@index([sha256])
   @@map("contract_versions")
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  contractId String      @map("contract_id")
+  userId     String      @map("user_id")
+  action     AuditAction
+  detail     String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([contractId, createdAt])
+  @@map("audit_logs")
 }

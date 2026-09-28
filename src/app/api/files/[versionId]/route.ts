@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
+import { logAction } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { absolutePath } from "@/lib/storage";
@@ -23,6 +24,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ versionI
 
   const download = new URL(req.url).searchParams.has("download");
   const disposition = `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(version.fileName)}`;
+  logAction(version.contractId, user.id, "DOWNLOAD", `${download ? "скачан" : "открыт"} · ${version.fileName}`);
 
   return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
     headers: {

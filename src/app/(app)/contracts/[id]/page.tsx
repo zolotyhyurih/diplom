@@ -5,11 +5,14 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AUDIT_ACTION_LABELS, logAction } from "@/lib/audit";
 import { requireUser } from "@/lib/dal";
 import { fmtDate, fmtDateTime, fmtMoney, fmtSize } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { OCR_LABELS, STATUS_LABELS, can } from "@/lib/roles";
 import { VersionForm } from "./version-form";
+
+const AUDIT_LOG_LIMIT = 20;
 
 const PREVIEW_CHARS = 4000;
 
@@ -40,6 +43,14 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
     },
   });
   if (!contract) notFound();
+  await logAction(contract.id, user.id, "VIEW");
+
+  const auditLogs = await prisma.auditLog.findMany({
+    where: { contractId: contract.id },
+    orderBy: { createdAt: "desc" },
+    take: AUDIT_LOG_LIMIT,
+    include: { user: { select: { name: true } } },
+  });
 
   const busy = contract.versions.some((v) => v.ocrStatus === "PENDING" || v.ocrStatus === "PROCESSING");
   const latestText = contract.versions.find((v) => v.extractedText)?.extractedText ?? null;
@@ -121,6 +132,28 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
               )}
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Журнал действий</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {auditLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Записей ещё нет.</p>
+          ) : (
+            <ul className="flex flex-col divide-y">
+              {auditLogs.map((log) => (
+                <li key={log.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-2 text-sm first:pt-0 last:pb-0">
+                  <span className="font-medium">{AUDIT_ACTION_LABELS[log.action]}</span>
+                  <span className="text-muted-foreground">— {log.user.name}</span>
+                  {log.detail && <span className="text-muted-foreground">({log.detail})</span>}
+                  <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{fmtDateTime(log.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

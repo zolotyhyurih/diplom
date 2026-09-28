@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { logAction } from "@/lib/audit";
 import { requirePermission } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { enqueueOcr } from "@/lib/queue";
@@ -79,6 +80,7 @@ export async function createContract(formData: FormData): Promise<FormState> {
     },
   });
   await enqueueOcr(version.id);
+  logAction(contract.id, user.id, "UPLOAD", `версия ${version.versionNumber} · ${file.name}`);
 
   redirect(`/contracts/${contract.id}`);
 }
@@ -116,6 +118,7 @@ export async function addVersion(contractId: string, formData: FormData): Promis
     },
   });
   await enqueueOcr(version.id);
+  logAction(contractId, user.id, "UPLOAD", `версия ${version.versionNumber} · ${file.name}`);
 
   redirect(`/contracts/${contractId}`);
 }
