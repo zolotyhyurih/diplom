@@ -46,7 +46,7 @@ export function UserForm() {
           autoCapitalize="none"
           autoComplete="off"
           value={f.values.email}
-          onChange={(e) => f.set("email", e.target.value)}
+          onChange={(e) => f.set("email", e.target.value.replace(/\s/g, ""))}
           aria-invalid={invalid("email")}
         />
       </Field>

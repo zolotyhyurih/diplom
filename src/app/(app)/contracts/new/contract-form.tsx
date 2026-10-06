@@ -11,7 +11,15 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { STATUS_LABELS } from "@/lib/roles";
-import { ALLOWED_NUMBER_CHARS, ContractEditSchema, ContractSchema, checkFile, sanitizeAmount, zodErrors } from "@/lib/schemas";
+import {
+  ALLOWED_NUMBER_CHARS,
+  ContractEditSchema,
+  ContractSchema,
+  checkFile,
+  isRealIsoDate,
+  sanitizeAmount,
+  zodErrors,
+} from "@/lib/schemas";
 import { useForm } from "@/lib/use-form";
 import { cn } from "@/lib/utils";
 
@@ -78,6 +86,8 @@ export function ContractForm({
   });
   const { values: v, errors: e } = f;
   const invalid = (k: string) => !!e[k] || undefined;
+  // Договор не может закончиться раньше начала действия и подписания: в календаре такие дни недоступны.
+  const expiresMin = [v.startsAt, v.signedAt].filter(isRealIsoDate).sort().at(-1);
 
   return (
     <form onSubmit={f.onSubmit} noValidate className="flex flex-col gap-5">
@@ -160,7 +170,13 @@ export function ContractForm({
           <DatePicker id="startsAt" value={v.startsAt} onChange={(d) => f.set("startsAt", d)} invalid={!!e.startsAt} />
         </Field>
         <Field label="Действует до" htmlFor="expiresAt" error={e.expiresAt}>
-          <DatePicker id="expiresAt" value={v.expiresAt} onChange={(d) => f.set("expiresAt", d)} invalid={!!e.expiresAt} />
+          <DatePicker
+            id="expiresAt"
+            value={v.expiresAt}
+            onChange={(d) => f.set("expiresAt", d)}
+            invalid={!!e.expiresAt}
+            min={expiresMin}
+          />
         </Field>
       </div>
 
@@ -169,6 +185,7 @@ export function ContractForm({
           <Input
             id="amount"
             inputMode="decimal"
+            maxLength={15}
             autoComplete="off"
             placeholder="150000"
             value={v.amount}

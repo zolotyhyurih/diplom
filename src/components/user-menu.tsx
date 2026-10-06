@@ -17,10 +17,11 @@ export function UserMenu({ name, roleLabel }: { name: string; roleLabel: string 
 
   return (
     <Menu.Root open={open} onOpenChange={setOpen}>
-      <Menu.Trigger render={<Button variant="outline" size="sm" className="gap-2" aria-label="Меню пользователя" />}>
+      <Menu.Trigger render={<Button variant="outline" size="sm" className="h-auto gap-2 py-1.5" aria-label="Меню пользователя" />}>
         <UserIcon />
-        <span className="hidden max-w-48 truncate lg:inline">
-          {name} · {roleLabel}
+        <span className="hidden flex-col items-start text-left leading-tight lg:flex">
+          <span className="max-w-52 truncate text-sm font-medium">{name}</span>
+          <span className="text-xs whitespace-nowrap text-muted-foreground">{roleLabel}</span>
         </span>
         <ChevronDownIcon />
       </Menu.Trigger>

@@ -63,6 +63,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
       <form method="get" action="/contracts" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_180px_200px_auto]">
         <Input
           name="q"
+          maxLength={200}
           defaultValue={filters.q}
           placeholder="Поиск по названию, контрагенту и тексту договора…"
           aria-label="Поиск"

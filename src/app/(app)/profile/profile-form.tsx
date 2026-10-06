@@ -69,7 +69,7 @@ export function ProfileForm({ initial }: { initial: { name: string; email: strin
           autoCapitalize="none"
           autoComplete="username"
           value={v.email}
-          onChange={(e) => f.set("email", e.target.value)}
+          onChange={(e) => f.set("email", e.target.value.replace(/\s/g, ""))}
           aria-invalid={invalid("email")}
         />
       </Field>

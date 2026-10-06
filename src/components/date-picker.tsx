@@ -50,16 +50,20 @@ export function DatePicker({
   value,
   onChange,
   invalid,
+  min,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   invalid?: boolean;
+  /** Самая ранняя допустимая дата (ISO): более ранние дни в календаре недоступны. */
+  min?: string;
 }) {
   const [text, setText] = useState(() => isoToText(value));
   const [open, setOpen] = useState(false);
   const today = new Date();
   const selected = parseIso(value);
+  const minDate = min ? parseIso(min) : null;
   const [view, setView] = useState(() => ({ y: selected?.y ?? today.getFullYear(), m: selected?.m ?? today.getMonth() }));
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -90,23 +94,29 @@ export function DatePicker({
   }
 
   function openCalendar() {
-    const s = parseIso(value);
+    const s = parseIso(value) ?? minDate;
     if (s) setView({ y: s.y, m: s.m });
     setOpen((o) => !o);
   }
+
+  const lowestYear = Math.max(MIN_YEAR, minDate?.y ?? MIN_YEAR);
+  const isBeforeMin = (y: number, m: number, d: number) =>
+    !!minDate && (y < minDate.y || (y === minDate.y && (m < minDate.m || (m === minDate.m && d < minDate.d))));
+  // Месяцы целиком раньше минимальной даты листать нельзя.
+  const canGoBack = !minDate || view.y * 12 + view.m > minDate.y * 12 + minDate.m;
 
   function shift(delta: number) {
     setView((v) => {
       const total = v.y * 12 + v.m + delta;
       const y = Math.floor(total / 12);
-      return { y: Math.min(MAX_YEAR, Math.max(MIN_YEAR, y)), m: ((total % 12) + 12) % 12 };
+      return { y: Math.min(MAX_YEAR, Math.max(lowestYear, y)), m: ((total % 12) + 12) % 12 };
     });
   }
 
   const firstWeekday = (new Date(view.y, view.m, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
   const cells = [...Array<null>(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
-  const years = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
+  const years = Array.from({ length: MAX_YEAR - lowestYear + 1 }, (_, i) => lowestYear + i);
 
   return (
     <div ref={rootRef} className="relative">
@@ -138,7 +148,7 @@ export function DatePicker({
           className="absolute left-0 z-40 mt-1 w-80 max-w-[calc(100vw-2rem)] animate-in rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg duration-150 fade-in zoom-in-95"
         >
           <div className="mb-3 flex items-center gap-1.5">
-            <Button type="button" variant="outline" size="icon" aria-label="Предыдущий месяц" onClick={() => shift(-1)}>
+            <Button type="button" variant="outline" size="icon" aria-label="Предыдущий месяц" disabled={!canGoBack} onClick={() => shift(-1)}>
               <ChevronLeftIcon />
             </Button>
             <NativeSelect
@@ -182,16 +192,18 @@ export function DatePicker({
             {cells.map((day, i) => {
               if (day === null) return <div key={`e${i}`} />;
               const isSelected = selected?.y === view.y && selected.m === view.m && selected.d === day;
+              const disabled = isBeforeMin(view.y, view.m, day);
               const isToday = today.getFullYear() === view.y && today.getMonth() === view.m && today.getDate() === day;
               return (
                 <button
                   key={day}
                   type="button"
+                  disabled={disabled}
                   onClick={() => pick(view.y, view.m, day)}
                   aria-label={`${day} ${MONTHS[view.m].toLowerCase()} ${view.y}`}
                   aria-pressed={isSelected}
                   className={cn(
-                    "mx-auto flex size-10 items-center justify-center rounded-lg text-sm transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                    "mx-auto flex size-10 items-center justify-center rounded-lg text-sm transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:pointer-events-none disabled:text-muted-foreground/40 disabled:line-through",
                     (i % 7 >= 5) && "text-destructive/80",
                     isToday && !isSelected && "border border-foreground/40 font-medium",
                     isSelected && "bg-primary font-medium text-primary-foreground hover:bg-primary/90",
@@ -204,7 +216,13 @@ export function DatePicker({
           </div>
 
           <div className="mt-3 flex justify-between border-t pt-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => pick(today.getFullYear(), today.getMonth(), today.getDate())}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isBeforeMin(today.getFullYear(), today.getMonth(), today.getDate())}
+              onClick={() => pick(today.getFullYear(), today.getMonth(), today.getDate())}
+            >
               Сегодня
             </Button>
             <Button

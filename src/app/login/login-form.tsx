@@ -40,7 +40,7 @@ export function LoginForm() {
               autoCapitalize="none"
               maxLength={254}
               value={f.values.email}
-              onChange={(e) => f.set("email", e.target.value)}
+              onChange={(e) => f.set("email", e.target.value.replace(/\s/g, ""))}
               aria-invalid={!!f.errors.email || undefined}
             />
           </Field>

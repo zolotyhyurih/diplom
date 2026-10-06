@@ -34,8 +34,9 @@ export function zodErrors(error: z.ZodError): Errors {
 export function sanitizeAmount(raw: string) {
   const v = raw.replace(/\./g, ",").replace(/[^\d,]/g, "");
   const i = v.indexOf(",");
-  const [int, frac] = (i === -1 ? v : v.slice(0, i + 1) + v.slice(i + 1).replace(/,/g, "")).split(",");
-  return frac === undefined ? int.slice(0, 12) : `${int.slice(0, 12)},${frac.slice(0, 2)}`;
+  const [rawInt, frac] = (i === -1 ? v : v.slice(0, i + 1) + v.slice(i + 1).replace(/,/g, "")).split(",");
+  const int = rawInt.replace(/^0+(?=\d)/, "").slice(0, 12); // без ведущих нулей: «007» → «7»
+  return frac === undefined ? int : `${int},${frac.slice(0, 2)}`;
 }
 
 export function isRealIsoDate(v: string) {
