@@ -10,6 +10,11 @@ export default async function proxy(req: NextRequest) {
   if (!session?.userId && !isLogin) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
+  if (isLogin && req.nextUrl.searchParams.has("expired")) {
+    const res = NextResponse.next();
+    res.cookies.delete(SESSION_COOKIE);
+    return res;
+  }
   if (session?.userId && isLogin) {
     return NextResponse.redirect(new URL("/contracts", req.nextUrl));
   }

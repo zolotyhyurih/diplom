@@ -18,7 +18,7 @@ export async function login(formData: FormData): Promise<FormState> {
 
   const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
   const ok = await bcrypt.compare(parsed.data.password, user?.passwordHash ?? DUMMY_HASH);
-  if (!user || !ok) return { error: "Неверный email или пароль" };
+  if (!user || !ok || !user.active) return { error: "Неверный email или пароль" };
 
   await createSession(user.id);
   redirect("/contracts");

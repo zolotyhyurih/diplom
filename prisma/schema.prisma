@@ -31,6 +31,7 @@ enum AuditAction {
   UPLOAD
   VIEW
   DOWNLOAD
+  UPDATE
 }
 
 model User {
@@ -39,6 +40,7 @@ model User {
   name         String
   passwordHash String   @map("password_hash")
   role         Role     @default(EMPLOYEE)
+  active       Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
 
   contracts Contract[]
@@ -120,6 +122,8 @@ model ContractVersion {
   ocrError      String?   @map("ocr_error")
   pageCount     Int?      @map("page_count")
   extractedText String?   @map("extracted_text")
+  // Вычисляется СУБД (см. миграцию search_vector), приложение это поле не записывает.
+  searchVector  Unsupported("tsvector")? @map("search_vector")
   processedAt   DateTime? @map("processed_at")
   uploadedById  String    @map("uploaded_by_id")
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -129,6 +133,7 @@ model ContractVersion {
 
   @@unique([contractId, versionNumber])
   @@index([sha256])
+  @@index([searchVector], map: "contract_versions_search_idx", type: Gin)
   @@map("contract_versions")
 }
 

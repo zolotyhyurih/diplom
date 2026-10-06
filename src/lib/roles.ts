@@ -23,6 +23,7 @@ export const OCR_LABELS = {
 // Права: сотрудник только читает и ищет, менеджер загружает и правит, админ управляет всем.
 export const can = {
   upload: (role: RoleName) => role === "ADMIN" || role === "MANAGER",
+  edit: (role: RoleName) => role === "ADMIN" || role === "MANAGER",
   delete: (role: RoleName) => role === "ADMIN",
   manageUsers: (role: RoleName) => role === "ADMIN",
 };

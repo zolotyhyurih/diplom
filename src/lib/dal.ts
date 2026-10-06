@@ -21,14 +21,17 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true, role: true },
+    select: { id: true, name: true, email: true, role: true, active: true },
   });
-  return user;
+  // Отключённого пользователя выкидываем сразу, не дожидаясь окончания срока токена.
+  if (!user?.active) return null;
+  return { id: user.id, name: user.name, email: user.email, role: user.role };
 });
 
 export async function requireUser() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // expired: в cookie ещё лежит токен, но пользователь отключён или удалён – proxy.ts по этому признаку сбросит cookie, иначе будет цикл перенаправлений.
+  if (!user) redirect("/login?expired=1");
   return user;
 }
 

@@ -54,14 +54,47 @@ export async function findContracts(filters: ContractFilters): Promise<ContractR
   const conditions: Prisma.Sql[] = [];
   if (status) conditions.push(Prisma.sql`AND c.status = ${status}::"ContractStatus"`);
   if (categoryId) conditions.push(Prisma.sql`AND c.category_id = ${categoryId}`);
-
-  // Ищем по метаданным договора, названию контрагента и распознанному тексту всех версий.
   const extra = conditions.length ? Prisma.join(conditions, " ") : Prisma.empty;
 
+  // Каждое условие поиска вынесено в отдельный подзапрос, чтобы PostgreSQL мог использовать GIN-индексы
+  // (условие «или» через разные таблицы сваливало запрос в полный перебор). Выражение по договору должно
+  // совпадать с индексом contracts_fts_idx, а текст версий ищется по готовому вектору search_vector.
+  // Фрагменты ts_headline считаются только для отобранных ста договоров.
   return prisma.$queryRaw<ContractRow[]>`
     WITH query AS (SELECT websearch_to_tsquery('russian', ${q}) AS tsq),
-    found AS (
-    SELECT DISTINCT ON (c.id)
+    meta AS (
+      SELECT c.id AS contract_id
+      FROM contracts c, query
+      WHERE to_tsvector('russian', coalesce(c.title, '') || ' ' || coalesce(c.number, '') || ' ' || coalesce(c.description, '')) @@ query.tsq
+      UNION
+      SELECT c.id
+      FROM contracts c
+      JOIN counterparties cp ON cp.id = c.counterparty_id, query
+      WHERE to_tsvector('russian', cp.name) @@ query.tsq
+      UNION
+      SELECT ct."A"
+      FROM "_ContractToTag" ct
+      JOIN tags t ON t.id = ct."B", query
+      WHERE to_tsvector('russian', t.name) @@ query.tsq
+    ),
+    text_hits AS (
+      SELECT DISTINCT ON (v.contract_id) v.contract_id, v.id AS version_id, ts_rank(v.search_vector, query.tsq) AS rank
+      FROM contract_versions v, query
+      WHERE v.search_vector @@ query.tsq
+      ORDER BY v.contract_id, rank DESC, v.version_number DESC
+    ),
+    top AS (
+      SELECT c.id, c.title, th.version_id,
+        coalesce(th.rank, 0) + CASE WHEN m.contract_id IS NOT NULL THEN 1 ELSE 0 END AS score
+      FROM contracts c
+      LEFT JOIN text_hits th ON th.contract_id = c.id
+      LEFT JOIN meta m ON m.contract_id = c.id
+      WHERE (th.contract_id IS NOT NULL OR m.contract_id IS NOT NULL)
+      ${extra}
+      ORDER BY score DESC, c.title
+      LIMIT 100
+    )
+    SELECT
       c.id,
       c.number,
       c.title,
@@ -69,30 +102,17 @@ export async function findContracts(filters: ContractFilters): Promise<ContractR
       c.expires_at AS "expiresAt",
       cp.name AS counterparty,
       cat.name AS category,
-      CASE
-        WHEN v.extracted_text IS NOT NULL
-         AND to_tsvector('russian', coalesce(v.extracted_text, '')) @@ query.tsq
+      CASE WHEN t.version_id IS NOT NULL
         THEN ts_headline('russian', v.extracted_text, query.tsq,
              ${`StartSel=${MARK_START}, StopSel=${MARK_END}, MaxFragments=2, MinWords=6, MaxWords=22, FragmentDelimiter= … `})
         ELSE NULL
-      END AS snippet,
-      ts_rank(to_tsvector('russian', coalesce(v.extracted_text, '')), query.tsq) AS rank
-    FROM contracts c
+      END AS snippet
+    FROM top t
+    JOIN contracts c ON c.id = t.id
     JOIN counterparties cp ON cp.id = c.counterparty_id
     LEFT JOIN categories cat ON cat.id = c.category_id
-    LEFT JOIN contract_versions v ON v.contract_id = c.id
+    LEFT JOIN contract_versions v ON v.id = t.version_id
     CROSS JOIN query
-    WHERE (
-      to_tsvector('russian', coalesce(c.title, '') || ' ' || coalesce(c.number, '') || ' ' || coalesce(c.description, '')) @@ query.tsq
-      OR to_tsvector('russian', cp.name) @@ query.tsq
-      OR to_tsvector('russian', coalesce(v.extracted_text, '')) @@ query.tsq
-    )
-    ${extra}
-    ORDER BY c.id, (to_tsvector('russian', coalesce(v.extracted_text, '')) @@ query.tsq) DESC, v.version_number DESC
-    )
-    SELECT id, number, title, status, "expiresAt", counterparty, category, snippet
-    FROM found
-    ORDER BY rank DESC, title
-    LIMIT 100
+    ORDER BY t.score DESC, t.title
   `;
 }

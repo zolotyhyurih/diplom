@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { createContract } from "@/app/actions/contracts";
+import { createContract, updateContract } from "@/app/actions/contracts";
 import { DatePicker } from "@/components/date-picker";
 import { FileField } from "@/components/file-field";
 import { Field } from "@/components/form-field";
@@ -10,7 +10,8 @@ import { TagInput } from "@/components/tag-input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ALLOWED_NUMBER_CHARS, ContractSchema, checkFile, sanitizeAmount, zodErrors } from "@/lib/schemas";
+import { STATUS_LABELS } from "@/lib/roles";
+import { ALLOWED_NUMBER_CHARS, ContractEditSchema, ContractSchema, checkFile, sanitizeAmount, zodErrors } from "@/lib/schemas";
 import { useForm } from "@/lib/use-form";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ type Values = {
   title: string;
   counterparty: string;
   categoryId: string;
+  status: string;
   amount: string;
   signedAt: string;
   startsAt: string;
@@ -33,6 +35,7 @@ const initial: Values = {
   title: "",
   counterparty: "",
   categoryId: "",
+  status: "ACTIVE",
   amount: "",
   signedAt: "",
   startsAt: "",
@@ -42,16 +45,23 @@ const initial: Values = {
   file: null,
 };
 
+// Одна форма и для загрузки нового договора, и для правки реквизитов существующего (параметр edit).
 export function ContractForm({
   categories,
   counterparties,
+  edit,
 }: {
   categories: { id: string; name: string }[];
   counterparties: string[];
+  edit?: { contractId: string; initial: Omit<Values, "file"> };
 }) {
   const f = useForm<Values>({
-    initial,
+    initial: edit ? { ...edit.initial, file: null } : initial,
     validate: ({ file, ...rest }) => {
+      if (edit) {
+        const r = ContractEditSchema.safeParse(rest);
+        return r.success ? {} : zodErrors(r.error);
+      }
       const r = ContractSchema.safeParse(rest);
       const errors = r.success ? {} : zodErrors(r.error);
       const fileError = checkFile(file);
@@ -61,6 +71,7 @@ export function ContractForm({
       const fd = new FormData();
       for (const [k, v] of Object.entries(rest)) fd.set(k, v);
       for (const tag of tags) fd.append("tags", tag);
+      if (edit) return updateContract(edit.contractId, fd);
       fd.set("file", file as File);
       return createContract(fd);
     },
@@ -82,9 +93,14 @@ export function ContractForm({
             aria-invalid={invalid("number")}
           />
         </Field>
-        <Field label="Категория" htmlFor="categoryId" error={e.categoryId}>
-          <NativeSelect id="categoryId" value={v.categoryId} onChange={(ev) => f.set("categoryId", ev.target.value)}>
-            <option value="">Без категории</option>
+        <Field label="Категория" htmlFor="categoryId" required error={e.categoryId}>
+          <NativeSelect
+            id="categoryId"
+            value={v.categoryId}
+            onChange={(ev) => f.set("categoryId", ev.target.value)}
+            aria-invalid={invalid("categoryId")}
+          >
+            <option value="">Выберите категорию</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -105,6 +121,18 @@ export function ContractForm({
           aria-invalid={invalid("title")}
         />
       </Field>
+
+      {edit && (
+        <Field label="Статус" htmlFor="status" required error={e.status}>
+          <NativeSelect id="status" value={v.status} onChange={(ev) => f.set("status", ev.target.value)}>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      )}
 
       <Field label="Контрагент" htmlFor="counterparty" required error={e.counterparty}>
         <Input
@@ -164,9 +192,11 @@ export function ContractForm({
         />
       </Field>
 
-      <Field label="Файл договора" htmlFor="file" required error={e.file}>
-        <FileField id="file" file={v.file} onChange={(file) => f.set("file", file)} invalid={!!e.file} />
-      </Field>
+      {!edit && (
+        <Field label="Файл договора" htmlFor="file" required error={e.file}>
+          <FileField id="file" file={v.file} onChange={(file) => f.set("file", file)} invalid={!!e.file} />
+        </Field>
+      )}
 
       {f.formError && (
         <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -176,7 +206,7 @@ export function ContractForm({
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row">
         <Link
-          href="/contracts"
+          href={edit ? `/contracts/${edit.contractId}` : "/contracts"}
           className={cn(
             buttonVariants({ variant: "outline" }),
             "h-10 border-2 border-foreground/50 px-5 text-sm hover:border-foreground/80",
@@ -185,7 +215,7 @@ export function ContractForm({
           Отмена
         </Link>
         <Button type="submit" disabled={f.pending} className="h-10 px-5 text-sm">
-          {f.pending ? "Сохранение…" : "Сохранить в архив"}
+          {f.pending ? "Сохранение…" : edit ? "Сохранить изменения" : "Сохранить в архив"}
         </Button>
       </div>
     </form>

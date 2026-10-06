@@ -6,7 +6,7 @@ import { requirePermission } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { enqueueOcr } from "@/lib/queue";
 import { can } from "@/lib/roles";
-import { ContractSchema, checkFile, zodErrors, type FormState } from "@/lib/schemas";
+import { ContractEditSchema, ContractSchema, checkFile, zodErrors, type FormState } from "@/lib/schemas";
 import { removeFile, saveFile } from "@/lib/storage";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "");
@@ -34,7 +34,7 @@ export async function createContract(formData: FormData): Promise<FormState> {
   const d = parsed.data;
   const file = formData.get("file") as File;
 
-  if (d.categoryId && !(await prisma.category.findUnique({ where: { id: d.categoryId } }))) {
+  if (!(await prisma.category.findUnique({ where: { id: d.categoryId } }))) {
     return { errors: { categoryId: "Такой категории нет — выберите из списка" } };
   }
   const duplicate = await prisma.contract.findFirst({
@@ -58,7 +58,7 @@ export async function createContract(formData: FormData): Promise<FormState> {
       startsAt: toDate(d.startsAt),
       expiresAt: toDate(d.expiresAt),
       counterpartyId: counterparty.id,
-      categoryId: d.categoryId || null,
+      categoryId: d.categoryId,
       createdById: user.id,
       tags: {
         connectOrCreate: [...new Set(d.tags)].map((name) => ({ where: { name }, create: { name } })),
@@ -83,6 +83,86 @@ export async function createContract(formData: FormData): Promise<FormState> {
   logAction(contract.id, user.id, "UPLOAD", `версия ${version.versionNumber} · ${file.name}`);
 
   redirect(`/contracts/${contract.id}`);
+}
+
+const ISO = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "");
+const money = (v: { toString(): string } | null) => (v == null ? "" : Number(v.toString()).toFixed(2));
+
+// Редактирование реквизитов договора. Файлы и версии здесь не затрагиваются: их меняет только addVersion.
+export async function updateContract(contractId: string, formData: FormData): Promise<FormState> {
+  const user = await requirePermission(can.edit);
+
+  const parsed = ContractEditSchema.safeParse({
+    number: str(formData, "number"),
+    title: str(formData, "title"),
+    counterparty: str(formData, "counterparty"),
+    categoryId: str(formData, "categoryId"),
+    status: str(formData, "status"),
+    amount: str(formData, "amount"),
+    signedAt: str(formData, "signedAt"),
+    startsAt: str(formData, "startsAt"),
+    expiresAt: str(formData, "expiresAt"),
+    tags: formData.getAll("tags").map(String),
+    description: str(formData, "description"),
+  });
+  if (!parsed.success) return { errors: zodErrors(parsed.error) };
+  const d = parsed.data;
+
+  const old = await prisma.contract.findUnique({
+    where: { id: contractId },
+    include: { counterparty: true, category: true, tags: true },
+  });
+  if (!old) return { error: "Договор не найден" };
+
+  const category = await prisma.category.findUnique({ where: { id: d.categoryId } });
+  if (!category) return { errors: { categoryId: "Такой категории нет — выберите из списка" } };
+
+  const duplicate = await prisma.contract.findFirst({
+    where: { id: { not: contractId }, number: d.number, counterparty: { name: d.counterparty } },
+  });
+  if (duplicate) return { errors: { number: "Договор с таким номером у этого контрагента уже есть в архиве" } };
+
+  const counterparty = await prisma.counterparty.upsert({
+    where: { name: d.counterparty },
+    update: {},
+    create: { name: d.counterparty },
+  });
+  const tags = [...new Set(d.tags)];
+
+  await prisma.contract.update({
+    where: { id: contractId },
+    data: {
+      number: d.number,
+      title: d.title,
+      description: d.description || null,
+      status: d.status,
+      amount: d.amount ? Number(d.amount.replace(",", ".")) : null,
+      signedAt: toDate(d.signedAt),
+      startsAt: toDate(d.startsAt),
+      expiresAt: toDate(d.expiresAt),
+      counterpartyId: counterparty.id,
+      categoryId: d.categoryId,
+      tags: { set: [], connectOrCreate: tags.map((name) => ({ where: { name }, create: { name } })) },
+    },
+  });
+
+  // В журнал попадает перечень изменившихся полей, а не их значения.
+  const changed = [
+    old.number !== d.number && "номер",
+    old.title !== d.title && "название",
+    old.counterparty.name !== d.counterparty && "контрагент",
+    old.categoryId !== d.categoryId && "категория",
+    old.status !== d.status && "статус",
+    money(old.amount) !== (d.amount ? Number(d.amount.replace(",", ".")).toFixed(2) : "") && "сумма",
+    ISO(old.signedAt) !== d.signedAt && "дата подписания",
+    ISO(old.startsAt) !== d.startsAt && "начало действия",
+    ISO(old.expiresAt) !== d.expiresAt && "окончание действия",
+    [...old.tags.map((t) => t.name)].sort().join("\n") !== [...tags].sort().join("\n") && "теги",
+    (old.description ?? "") !== d.description && "описание",
+  ].filter(Boolean);
+  await logAction(contractId, user.id, "UPDATE", changed.length ? `изменено: ${changed.join(", ")}` : "без изменений");
+
+  redirect(`/contracts/${contractId}`);
 }
 
 export async function addVersion(contractId: string, formData: FormData): Promise<FormState> {

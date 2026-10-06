@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteContract, retryOcr, addVersion } from "@/app/actions/contracts";
 import { BackLink } from "@/components/back-link";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { DeleteContractButton } from "@/components/delete-contract-button";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,7 +67,14 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           <h1 className="mt-3 break-words text-2xl font-semibold">{contract.title}</h1>
           <p className="text-sm text-muted-foreground">Договор № {contract.number}</p>
         </div>
-        <Badge variant={contract.status === "ACTIVE" ? "default" : "secondary"}>{STATUS_LABELS[contract.status]}</Badge>
+        <div className="flex items-center gap-2">
+          {can.edit(user.role) && (
+            <Link href={`/contracts/${contract.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Редактировать
+            </Link>
+          )}
+          <Badge variant={contract.status === "ACTIVE" ? "default" : "secondary"}>{STATUS_LABELS[contract.status]}</Badge>
+        </div>
       </div>
 
       <Card>
@@ -186,11 +195,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
       )}
 
       {can.delete(user.role) && (
-        <form action={deleteContract.bind(null, contract.id)}>
-          <Button type="submit" variant="destructive">
-            Удалить договор вместе с файлами
-          </Button>
-        </form>
+        <DeleteContractButton action={deleteContract.bind(null, contract.id)} title={contract.title} label="Удалить договор вместе с файлами" />
       )}
     </div>
   );

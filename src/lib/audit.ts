@@ -5,6 +5,7 @@ export const AUDIT_ACTION_LABELS = {
   UPLOAD: "Загрузка версии",
   VIEW: "Просмотр карточки",
   DOWNLOAD: "Скачивание файла",
+  UPDATE: "Изменение реквизитов",
 } as const;
 
 type AuditAction = keyof typeof AUDIT_ACTION_LABELS;

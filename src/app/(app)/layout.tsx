@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { logout } from "@/app/actions/auth";
 import { MobileMenu, type MenuItem } from "@/components/mobile-menu";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { UserMenu } from "@/components/user-menu";
 import { requireUser } from "@/lib/dal";
 import { ROLE_LABELS, can } from "@/lib/roles";
 
@@ -32,15 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             ))}
           </nav>
 
-          <div className="ml-auto hidden items-center gap-3 md:flex">
-            <span className="hidden text-sm whitespace-nowrap text-muted-foreground lg:inline">
-              {user.name} · {ROLE_LABELS[user.role]}
-            </span>
-            <form action={logout}>
-              <Button type="submit" variant="outline" size="sm">
-                Выйти
-              </Button>
-            </form>
+          <div className="ml-auto hidden md:block">
+            <UserMenu name={user.name} roleLabel={ROLE_LABELS[user.role]} />
           </div>
         </div>
       </header>

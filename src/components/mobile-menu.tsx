@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logout } from "@/app/actions/auth";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type MenuItem = { href: string; label: string };
@@ -87,6 +87,13 @@ export function MobileMenu({
                 <p className="truncate font-medium">{userName}</p>
                 <p className="text-sm text-muted-foreground">{roleLabel}</p>
               </div>
+              <Link
+                href="/profile"
+                onClick={() => setOpen(false)}
+                className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+              >
+                Профиль
+              </Link>
               <form action={logout}>
                 <Button type="submit" variant="outline" className="w-full">
                   Выйти

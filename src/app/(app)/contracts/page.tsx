@@ -1,4 +1,7 @@
+import { PencilIcon } from "lucide-react";
 import Link from "next/link";
+import { deleteContract } from "@/app/actions/contracts";
+import { DeleteContractButton } from "@/components/delete-contract-button";
 import { NativeSelect } from "@/components/native-select";
 import { Snippet } from "@/components/snippet";
 import { Badge } from "@/components/ui/badge";
@@ -8,12 +11,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { requireUser } from "@/lib/dal";
 import { fmtDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
-import { STATUS_LABELS, can } from "@/lib/roles";
+import { STATUS_LABELS, can, type RoleName } from "@/lib/roles";
 import { findContracts } from "@/lib/search";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const pick = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
+
+function RowActions({ id, title, role }: { id: string; title: string; role: RoleName }) {
+  if (!can.edit(role) && !can.delete(role)) return null;
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {can.edit(role) && (
+        <Link
+          href={`/contracts/${id}/edit`}
+          title="Редактировать"
+          aria-label={`Редактировать договор ${title}`}
+          className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+        >
+          <PencilIcon />
+        </Link>
+      )}
+      {can.delete(role) && <DeleteContractButton action={deleteContract.bind(null, id)} title={title} />}
+    </div>
+  );
+}
 
 export default async function ContractsPage({ searchParams }: { searchParams: SearchParams }) {
   const user = await requireUser();
@@ -24,6 +46,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
     findContracts(filters),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
   ]);
+  const showActions = can.edit(user.role) || can.delete(user.role);
   const filtered = Boolean(filters.q || filters.status || filters.categoryId);
 
   return (
@@ -91,12 +114,18 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  № {c.number} · {c.counterparty}
+                  <Link href={`/contracts/${c.id}`} className="hover:underline">
+                    № {c.number}
+                  </Link>{" "}
+                  · {c.counterparty}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {c.category ?? "Без категории"} · до {fmtDate(c.expiresAt)}
                 </p>
                 {c.snippet && <div className="mt-2"><Snippet text={c.snippet} /></div>}
+                <div className="mt-2">
+                  <RowActions id={c.id} title={c.title} role={user.role} />
+                </div>
               </li>
             ))}
           </ul>
@@ -111,12 +140,17 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
                   <TableHead>Категория</TableHead>
                   <TableHead>Статус</TableHead>
                   <TableHead>Действует до</TableHead>
+                  {showActions && <TableHead className="w-24 text-right">Действия</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="whitespace-nowrap">{c.number}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Link href={`/contracts/${c.id}`} className="hover:underline">
+                        {c.number}
+                      </Link>
+                    </TableCell>
                     <TableCell className="max-w-md whitespace-normal">
                       <Link href={`/contracts/${c.id}`} className="font-medium hover:underline">
                         {c.title}
@@ -129,6 +163,11 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
                       <Badge variant={c.status === "ACTIVE" ? "default" : "secondary"}>{STATUS_LABELS[c.status]}</Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{fmtDate(c.expiresAt)}</TableCell>
+                    {showActions && (
+                      <TableCell>
+                        <RowActions id={c.id} title={c.title} role={user.role} />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
