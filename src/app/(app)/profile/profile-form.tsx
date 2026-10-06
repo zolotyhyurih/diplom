@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { updateProfile } from "@/app/actions/profile";
+import { ConfirmDialog, useConfirmedSubmit } from "@/components/confirm-dialog";
 import { Field } from "@/components/form-field";
 import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
@@ -33,24 +35,20 @@ export function ProfileForm({ initial }: { initial: { name: string; email: strin
     v.newPassword !== "" && "пароль",
   ].filter(Boolean) as string[];
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    const valid = ProfileSchema.safeParse(v).success;
-    if (valid) {
-      if (changes.length === 0) {
-        e.preventDefault();
-        window.alert("Вы ничего не изменили.");
-        return;
-      }
-      if (!window.confirm(`Сохранить изменения в профиле (${changes.join(", ")})?`)) {
-        e.preventDefault();
-        return;
-      }
+  const [nothing, setNothing] = useState(false);
+  const valid = ProfileSchema.safeParse(v).success;
+  // Окно подтверждения показываем только для правильно заполненной формы; при ошибках ввода просто появятся сообщения.
+  const { open, setOpen, formRef, onSubmit: onConfirmedSubmit, confirm } = useConfirmedSubmit(f.onSubmit, () => {
+    if (!valid) return false;
+    if (changes.length === 0) {
+      setNothing(true);
+      return "block";
     }
-    f.onSubmit(e); // при ошибках ввода просто покажет сообщения
-  }
+    return true;
+  });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form ref={formRef} onSubmit={onConfirmedSubmit} noValidate className="flex flex-col gap-4">
       <Field label="Имя" htmlFor="name" required error={f.errors.name}>
         <Input
           id="name"
@@ -116,6 +114,22 @@ export function ProfileForm({ initial }: { initial: { name: string; email: strin
       <Button type="submit" disabled={f.pending} className="self-start">
         {f.pending ? "Сохранение…" : "Сохранить изменения"}
       </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Сохранить изменения?"
+        description="В профиле будут изменены:"
+        details={changes.map((x) => x[0].toUpperCase() + x.slice(1))}
+        confirmLabel="Сохранить"
+        onConfirm={confirm}
+      />
+      <ConfirmDialog
+        open={nothing}
+        onOpenChange={setNothing}
+        tone="info"
+        title="Нечего сохранять"
+        description="Вы ничего не изменили в профиле."
+      />
     </form>
   );
 }

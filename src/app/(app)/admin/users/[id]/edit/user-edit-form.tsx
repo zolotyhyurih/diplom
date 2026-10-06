@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { updateUser } from "@/app/actions/users";
+import { ConfirmDialog, useConfirmedSubmit } from "@/components/confirm-dialog";
 import { Field } from "@/components/form-field";
 import { NativeSelect } from "@/components/native-select";
 import { PasswordInput } from "@/components/password-input";
@@ -29,8 +31,26 @@ export function UserEditForm({ userId, initial, isSelf }: { userId: string; init
   });
   const invalid = (k: string) => !!f.errors[k] || undefined;
 
+  const v = f.values;
+  const [nothing, setNothing] = useState(false);
+  const changes = [
+    v.name.trim() !== initial.name && "Имя",
+    v.email.trim().toLowerCase() !== initial.email && "Почта",
+    v.role !== initial.role && "Роль",
+    v.active !== initial.active && (v.active === "true" ? "Учётная запись будет включена" : "Учётная запись будет отключена"),
+    v.password !== "" && "Пароль",
+  ].filter(Boolean) as string[];
+  const { open, setOpen, formRef, onSubmit: onConfirmedSubmit, confirm } = useConfirmedSubmit(f.onSubmit, () => {
+    if (!UserEditSchema.safeParse(v).success) return false;
+    if (changes.length === 0) {
+      setNothing(true);
+      return "block";
+    }
+    return true;
+  });
+
   return (
-    <form onSubmit={f.onSubmit} noValidate className="flex flex-col gap-4">
+    <form ref={formRef} onSubmit={onConfirmedSubmit} noValidate className="flex flex-col gap-4">
       <Field label="Имя" htmlFor="name" required error={f.errors.name}>
         <Input
           id="name"
@@ -104,6 +124,23 @@ export function UserEditForm({ userId, initial, isSelf }: { userId: string; init
           {f.pending ? "Сохранение…" : "Сохранить изменения"}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Сохранить изменения пользователя?"
+        description="Будет изменено:"
+        details={changes}
+        confirmLabel="Сохранить"
+        onConfirm={confirm}
+      />
+      <ConfirmDialog
+        open={nothing}
+        onOpenChange={setNothing}
+        tone="info"
+        title="Нечего сохранять"
+        description="Вы ничего не изменили в учётной записи."
+      />
     </form>
   );
 }

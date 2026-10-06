@@ -1,6 +1,7 @@
 "use client";
 
 import { deleteProfile } from "@/app/actions/profile";
+import { ConfirmDialog, useConfirmedSubmit } from "@/components/confirm-dialog";
 import { Field } from "@/components/form-field";
 import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
@@ -18,16 +19,10 @@ export function DeleteProfileForm() {
     },
   });
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    if (f.values.deletePassword && !window.confirm("Удалить свой профиль? Войти в систему с этими данными больше не получится. Действие необратимо.")) {
-      e.preventDefault();
-      return;
-    }
-    f.onSubmit(e);
-  }
+  const { open, setOpen, formRef, onSubmit: onConfirmedSubmit, confirm } = useConfirmedSubmit(f.onSubmit, () => !!f.values.deletePassword);
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form ref={formRef} onSubmit={onConfirmedSubmit} noValidate className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
         Профиль можно удалить, только если вы ещё ничего не загружали и не меняли в системе. В остальных случаях попросите администратора отключить вашу учётную запись.
       </p>
@@ -49,6 +44,15 @@ export function DeleteProfileForm() {
       <Button type="submit" variant="destructive" disabled={f.pending} className="self-start">
         {f.pending ? "Удаление…" : "Удалить профиль"}
       </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        tone="danger"
+        title="Удалить профиль?"
+        description="Войти в систему с этими данными больше не получится. Это действие необратимо."
+        confirmLabel="Удалить профиль"
+        onConfirm={confirm}
+      />
     </form>
   );
 }

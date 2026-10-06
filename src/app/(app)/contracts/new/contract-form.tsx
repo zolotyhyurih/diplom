@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { createContract, updateContract } from "@/app/actions/contracts";
+import { ConfirmDialog, useConfirmedSubmit } from "@/components/confirm-dialog";
 import { DatePicker } from "@/components/date-picker";
 import { FileField } from "@/components/file-field";
 import { Field } from "@/components/form-field";
@@ -37,6 +39,20 @@ type Values = {
   description: string;
   file: File | null;
 };
+
+const FIELD_LABELS = {
+  number: "Номер",
+  title: "Название",
+  counterparty: "Контрагент",
+  categoryId: "Категория",
+  status: "Статус",
+  signedAt: "Дата подписания",
+  startsAt: "Начало действия",
+  expiresAt: "Действует до",
+  amount: "Сумма",
+  tags: "Теги",
+  description: "Описание",
+} as const;
 
 const initial: Values = {
   number: "",
@@ -89,8 +105,24 @@ export function ContractForm({
   // Договор не может закончиться раньше начала действия и подписания: в календаре такие дни недоступны.
   const expiresMin = [v.startsAt, v.signedAt].filter(isRealIsoDate).sort().at(-1);
 
+  // При редактировании перед сохранением показываем окно подтверждения со списком изменённых полей.
+  const [nothing, setNothing] = useState(false);
+  const changes = edit
+    ? (Object.entries(FIELD_LABELS) as [keyof typeof FIELD_LABELS, string][])
+        .filter(([k]) => JSON.stringify(v[k]) !== JSON.stringify(edit.initial[k]))
+        .map(([, label]) => label)
+    : [];
+  const { open, setOpen, formRef, onSubmit: onConfirmedSubmit, confirm } = useConfirmedSubmit(f.onSubmit, () => {
+    if (!edit || !ContractEditSchema.safeParse({ ...v, file: undefined }).success) return false;
+    if (changes.length === 0) {
+      setNothing(true);
+      return "block";
+    }
+    return true;
+  });
+
   return (
-    <form onSubmit={f.onSubmit} noValidate className="flex flex-col gap-5">
+    <form ref={formRef} onSubmit={onConfirmedSubmit} noValidate className="flex flex-col gap-5">
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Номер договора" htmlFor="number" required error={e.number}>
           <Input
@@ -235,6 +267,23 @@ export function ContractForm({
           {f.pending ? "Сохранение…" : edit ? "Сохранить изменения" : "Сохранить в архив"}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Сохранить изменения в договоре?"
+        description="Будут изменены поля (файлы и версии не затрагиваются):"
+        details={changes}
+        confirmLabel="Сохранить"
+        onConfirm={confirm}
+      />
+      <ConfirmDialog
+        open={nothing}
+        onOpenChange={setNothing}
+        tone="info"
+        title="Нечего сохранять"
+        description="Вы ничего не изменили в договоре."
+      />
     </form>
   );
 }
